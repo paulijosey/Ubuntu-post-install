@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 
 # TODO: add dot file install process
 while getopts ":a:r:b:p:h" o; do case "${o}" in
@@ -9,9 +9,9 @@ while getopts ":a:r:b:p:h" o; do case "${o}" in
 	*) printf "Invalid option: -%s\\n" "$OPTARG" && exit ;;
 esac done
 
-# TODO: change default options to my repo
+# TODO: change default dorfile options to my repo
 [ -z "$dotfilesrepo" ] && dotfilesrepo=""
-[ -z "$progsfile" ] && progsfile=""
+[ -z "$progsfile" ] && progsfile="https://github.com/paulijosey/Ubuntu-post-install/blob/master/progs.csv"
 [ -z "$repobranch" ] && repobranch="master"
 
 # figure out which installer to use
@@ -19,11 +19,10 @@ esac done
 if type apt >/dev/null 2>&1; then
 	echo 'Using apt as package manager'
 	installpkg(){ apt-get install -y "$1" >/dev/null 2>&1 ;}
-	grepseq="\"^[PGU]*,\""
 fi
 
 # programs that are neccessary for the install process
-basic_programs=(curl git)
+basic_programs=(curl git csvkit)
 
 maininstall() { # Installs all needed programs from main repo.
 	echo 'installing ' $1
@@ -49,12 +48,17 @@ gitmakeinstall() {
 # function to read a csv file in the form
 # TAG	|	NAME/GIT URL	|	PURPOSE/DESCRIPTION
 installationloop() { \
+	echo $progsfile
 	([ -f "$progsfile" ] && cp "$progsfile" /tmp/progs.csv) || curl -Ls "$progsfile" | sed '/^#/d' | eval grep "$grepseq" > /tmp/progs.csv
-	total=$(wc -l < /tmp/progs.csv)
-	aurinstalled=$(pacman -Qqm)
-	while IFS=, read -r tag program comment; do
-		n=$((n+1))
-		echo "$comment" | grep "^\".*\"$" >/dev/null 2>&1 && comment="$(echo "$comment" | sed "s/\(^\"\|\"$\)//g")"
+	echo 'file copyed'
+	n=$(wc -l < /tmp/progs.csv)
+	echo $n 'programs to be installed'
+	while [ 1 -lt $n ]; do
+		line="$n"','"$n"'p'
+		program=$(csvcut -c 2 /tmp/progs.csv | sed -n "$line")
+		tag=$(csvcut -c 1 /tmp/progs.csv | sed -n "$line")
+
+		n=$((n-1))
 		case "$tag" in
 			"G") gitmakeinstall "$program" "$comment" ;;
 			"P") pipinstall "$program" "$comment" ;;
@@ -81,4 +85,4 @@ done
 # and all build dependencies are installed.
 echo 'start installation'
 installationloop
-
+echo 'Installation finished'
