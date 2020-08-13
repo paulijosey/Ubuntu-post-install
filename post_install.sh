@@ -45,14 +45,35 @@ gitmakeinstall() {
 	make install >/dev/null 2>&1
 	cd /tmp || return ;}
 
+PPAadd(){
+	echo 'addind PPA ' $1
+	curl -s "$1" | sudo apt-key --keyring /etc/apt/trusted.gpg.d/"$2" add -
+	}
+
+
 # function to read a csv file in the form
 # TAG	|	NAME/GIT URL	|	PURPOSE/DESCRIPTION
 installationloop() { \
-	echo $progsfile
 	([ -f "$progsfile" ] && cp "$progsfile" /tmp/progs.csv) || curl -Ls "$progsfile" | sed '/^#/d' | eval grep "$grepseq" > /tmp/progs.csv
-	echo 'file copyed'
 	n=$(wc -l < /tmp/progs.csv)
-	echo $n 'programs to be installed'
+
+	# first add all the PPA's
+	echo 'fetching and adding needed PPA's
+	while [ 1 -lt $n ]; do
+		line="$n"','"$n"'p'
+		program=$(csvcut -c 2 /tmp/progs.csv | sed -n "$line")
+		tag=$(csvcut -c 1 /tmp/progs.csv | sed -n "$line")
+		PPA=$(csvcut -c 3 /tmp/progs.csv | sed -n "$line")
+
+		n=$((n-1))
+		case "$tag" in
+			"R") PPAadd "$program" "$PPA" ;;
+			*) ;;
+		esac
+	done
+
+	# now install the programs
+	n=$(wc -l < /tmp/progs.csv)
 	while [ 1 -lt $n ]; do
 		line="$n"','"$n"'p'
 		program=$(csvcut -c 2 /tmp/progs.csv | sed -n "$line")
@@ -62,7 +83,8 @@ installationloop() { \
 		case "$tag" in
 			"G") gitmakeinstall "$program" "$comment" ;;
 			"P") pipinstall "$program" "$comment" ;;
-			*) maininstall "$program" "$comment" ;;
+			"S") maininstall "$program" "$comment" ;;
+			*) ;;
 		esac
 	done < /tmp/progs.csv ;}
 
@@ -71,7 +93,7 @@ installationloop() { \
 
 # Update system
 cd ~
-#sudo apt update
+sudo apt update
 
 # install all programs from basic_programs list
 for i in ${basic_programs[@]}
